@@ -1,4 +1,7 @@
 const mongoose = require('mongoose');
+const jwt = require('jsonwebtoken');
+const { customApiError } = require('../utils/ApiError');
+const bcrypt = require('bcrypt');
 
 const userSchema = new mongoose.Schema({
     username : {
@@ -31,7 +34,6 @@ const userSchema = new mongoose.Schema({
     picture : String,
     gender:{
         type:String,
-        required:[true,"gender of user is mandotory"],
         enum :["Man","Woman","Other"]
     },
     dateOfBirth:{
@@ -44,4 +46,39 @@ const userSchema = new mongoose.Schema({
     }]
 },{timestamps : true});
 
+userSchema.pre("save", async function (next) {
+    if(!this.isModified("password")) return next();
+
+    this.password = await bcrypt.hash(this.password, 10)
+    next()
+})
+
+userSchema.methods.isPasswordCorrect = async function(password){
+    return await bcrypt.compare(password,this.password);
+}
+
+userSchema.methods.generateAccessToken = function (){
+    return jwt.sign(
+        {
+            id: this._id,
+            email: this.email,
+            username: this.username
+        },
+        process.env.AccessKey,
+        {
+            expiresIn: process.env.AccessExpiry
+        }
+    )
+}
+userSchema.methods.generateRefreshToken = function (){
+    return jwt.sign(
+        {
+            id: this._id,
+        },
+        process.env.RefreshKey,
+        {
+            expiresIn: process.env.RefreshExpiry
+        }
+    )
+}
 module.exports = mongoose.model("User",userSchema);
