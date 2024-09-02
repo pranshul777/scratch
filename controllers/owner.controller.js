@@ -2,7 +2,7 @@ const AsyncWrapper = require('../utils/AsyncWrapper.js');
 const {ApiError,customApiError} = require('../utils/ApiError.js');
 const {badRequest,notAvailable,notFound,serviceUnavailable,unauthorised}= require('../utils/errors/error.js');
 const owner = require('../models/owner.model.js');
-const fileUploader = require('../utils/cloudnary.js');
+const {fileUploader,deleteImage} = require('../utils/cloudnary.js');
 
 const getOwnerData = AsyncWrapper(async (req,res,next)=>{
     const {username} = req.params;
@@ -195,20 +195,23 @@ const ownerUpdate = AsyncWrapper(async (req,res,next)=>{
 })
 
 const uploadImage = AsyncWrapper(async (req,res,next)=>{
+    //check if owner already have an image 
+    const Owner = await owner.findById(req.owner);
+    if(!Owner){
+        return next(customApiError(500,"something is going wrong"));
+    }
+    const pic = Owner.picture;
+    if(pic){
+        await deleteImage(pic);
+    }
+
     console.log(req.file);
     const cloudinaryUrl = await fileUploader(req.file.path,next);
     if(!cloudinaryUrl){
-        console.log(cloudinaryUrl);
         return next(customApiError(500,"file URL can't be recieved"));
     }
-    console.log(cloudinaryUrl);
-    const currentUser = await owner.findById(req.user);
-    if(!currentUser){
-        return next(customApiError(500,"owner can't be fetched for file upload"))
-    }
-    console.log(currentUser)
-    currentUser.picture=cloudinaryUrl;
-    currentUser.save({validateBeforeSave:false});
+    Owner.picture=cloudinaryUrl;
+    await Owner.save();
     res.status(200).json({"status":"success","message":"picture uploaded"});
 })
 

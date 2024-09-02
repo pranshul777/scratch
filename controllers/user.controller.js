@@ -2,7 +2,8 @@ const AsyncWrapper = require('../utils/AsyncWrapper.js');
 const {ApiError,customApiError} = require('../utils/ApiError.js');
 const {badRequest,notAvailable,notFound,serviceUnavailable,unauthorised}= require('../utils/errors/error.js');
 const user = require('../models/user.model.js');
-const fileUploader = require('../utils/cloudnary.js');
+const {fileUploader,deleteImage} = require('../utils/cloudnary.js');
+const { default: mongoose } = require('mongoose');
 
 const getUserData = AsyncWrapper(async (req,res,next)=>{
     const {username} = req.params;
@@ -189,20 +190,23 @@ const userUpdate = AsyncWrapper(async (req,res,next)=>{
 })
 
 const uploadImage = AsyncWrapper(async (req,res,next)=>{
+    //check if user already have an image
+    const User = await user.findById(req.user);
+    if(!User){
+        return next(customApiError(500,"something is going wrong"));
+    }
+    const pic = User.picture;
+    if(pic){
+        await deleteImage(pic);
+    }
     // console.log(req.file);
     const cloudinaryUrl = await fileUploader(req.file.path,next);
     if(!cloudinaryUrl){
         // console.log(cloudinaryUrl);
         return next(customApiError(500,"file URL can't be recieved"));
     }
-    // console.log(cloudinaryUrl);
-    const currentUser = await user.findById(req.user);
-    if(!currentUser){
-        return next(customApiError(500,"user can't be fetched for file upload"))
-    }
-    // console.log(currentUser)
-    currentUser.picture=cloudinaryUrl;
-    currentUser.save();
+    User.picture=cloudinaryUrl;
+    await User.save();
     res.status(200).json({"status":"success","message":"picture uploaded"});
 })
 
@@ -245,4 +249,26 @@ const cartOfUser = AsyncWrapper(async (req,res,next)=>{
     res.status(200).json({"status":"success","data":cartProducts});
 })
 
-module.exports={getUserData,registerUser,userLogin,userUpdate,uploadImage,changePassword,cartOfUser,userLogout};
+const addToCart= AsyncWrapper(async (req,res,next)=>{
+    const {product} = req.user;
+    if(!product || typeof product != mongoose.Schema.Types.ObjectId){
+        return next(customApiError(500,"not provided valid product id"))
+    }
+    const User =await user.findByIdAndUpdate(req.user,{$push : {cart : product}});
+    if(!User){
+        return next(customApiError(500,"User is not available"));
+    }
+    res.status(200).json({"status":"successful"})
+})
+const removeFromCart = AsyncWrapper(async (req,res,next)=>{
+    const {product} = req.user;
+    if(!product || typeof product != mongoose.Schema.Types.ObjectId){
+        return next(customApiError(500,"not provided valid product id"))
+    }
+    const User =await user.findByIdAndUpdate(req.user,{$pull : {cart : product}});
+    if(!User){
+        return next(customApiError(500,"User is not available"));
+    }
+    res.status(200).json({"status":"successful"})
+})
+module.exports={getUserData,registerUser,userLogin,userUpdate,uploadImage,changePassword,cartOfUser,userLogout,addToCart,removeFromCart};

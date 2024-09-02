@@ -16,6 +16,6 @@ router.route("/:username").get(getOwnerData); //to get basuc details of anyrando
 router.route("/register").post(registerOwner); //for user registration
 router.route("/updateUser").patch(authO,ownerUpdate); // to update user data
 router.route("/changePassword").patch(authO,changePassword); // change password of user
-router.route("/cart").get(authO,productsOfOwner); //to access cart of user
+router.route("/products").get(authO,productsOfOwner); //to access cart of user
 
 module.exports = router;
